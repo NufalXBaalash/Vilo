@@ -2,7 +2,6 @@ import os
 from openai import OpenAI
 
 # Default configuration (can be overridden)
-DEFAULT_API_KEY = "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"
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL_NAME = "llama-3.1-8b-instant"
 
