@@ -1,17 +1,9 @@
-from openai import OpenAI
+from model_init.model import query_model
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import Docx2txtLoader
-from openai import OpenAI
 import json
 import re
-
-# --- Initialize the model ---
-def get_client(api_key):
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
 
 
 # --- Read Files Functions ---
@@ -56,8 +48,6 @@ def extract_pages_from_chunk(chunk_text):
 
 # --- Generate Questions and Answers ---
 
-# --- Generate Questions and Answers ---
-
 def generate_qa_per_chunk(chunk_text, api_key, location=None):
     # Determine number of questions based on length
     # e.g., 1 question per 300 characters, min 2, max 5
@@ -95,14 +85,13 @@ def generate_qa_per_chunk(chunk_text, api_key, location=None):
     \"\"\"{chunk_text}\"\"\"
     """
 
-    client = get_client(api_key)
-    response = client.chat.completions.create(
-        model="x-ai/grok-4.1-fast",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    content = response.choices[0].message.content
+    # Use the centralized model query function
+    # We can pass the api_key. If it's an OpenRouter key, we might need to specify base_url and model.
+    # However, assuming the user wants to use the model_init defaults (Groq) or whatever is configured there.
+    # If we want to support the previous model (x-ai/grok-4.1-fast), we should pass it.
+    # But let's try to use the default from model_init first as requested.
+    
+    content = query_model(prompt, api_key=api_key)
 
     # Clean up markdown code blocks if present
     if content.startswith("```json"):

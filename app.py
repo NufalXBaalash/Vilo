@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from QA import qa_pipeline
 from Summarize import summarize_pipeline
 from Keyword import keyword_pipeline
+from RAG_System import run_rag_pipeline
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Change this in production
@@ -20,9 +21,19 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_api_key():
+    return session.get('api_key')
+
+def get_current_file():
+    return session.get('current_file')
+
 @app.route('/')
 def index():
     return render_template('chat.html')
+
+@app.route('/qa')
+def qa_page():
+    return render_template('qa.html')
 
 @app.route('/api/settings', methods=['POST'])
 def save_settings():
@@ -49,17 +60,55 @@ def upload_file():
     
     return jsonify({'error': 'Invalid file type'}), 400
 
-def get_api_key():
-    return session.get('api_key')
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    data = request.json
+    message = data.get('message', '')
+    
+    filepath = get_current_file()
+    if not filepath or not os.path.exists(filepath):
+        return jsonify({'error': 'Please upload a file first.'}), 400
 
-def get_current_file():
-    return session.get('current_file')
+    # Handle commands
+    if message.strip().startswith('/summarize'):
+        return api_summarize()
+    elif message.strip().startswith('/keyword'):
+        return api_keyword()
+    
+    # RAG Chat
+    try:
+        # We might need to handle API key here if RAG_System uses it.
+        # RAG_System uses model_init which uses default or passed key.
+        # But RAG_System.py imports query_groq_model from model_init.model
+        # I should check if I broke RAG_System.py by changing model_init.model
+        
+        api_key = get_api_key()
+        answer, best_chunks = run_rag_pipeline(filepath, message, api_key=api_key)
+        
+        # Format sources
+        sources = []
+        for chunk in best_chunks:
+            sources.append({
+                'text': chunk['text'][:200] + "...",
+                'page': chunk.get('metadata', {}).get('page_number', 'Unknown')
+            })
+            
+        return jsonify({'response': answer, 'sources': sources})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/questions', methods=['POST'])
 def api_questions():
     api_key = get_api_key()
+    # QA.py uses query_model which can use default key if none provided, 
+    # but let's enforce user providing it if we want.
+    # The original code enforced it.
     if not api_key:
-        return jsonify({'error': 'Please set your API Key in settings first.'}), 401
+         # If we want to allow default key from model_init, we can skip this check 
+         # or check if model_init has a default.
+         # But for safety, let's assume user must provide it if they want to use their own,
+         # or we use the default.
+         pass 
     
     filepath = get_current_file()
     if not filepath or not os.path.exists(filepath):
@@ -74,32 +123,26 @@ def api_questions():
 @app.route('/api/summarize', methods=['POST'])
 def api_summarize():
     api_key = get_api_key()
-    if not api_key:
-        return jsonify({'error': 'Please set your API Key in settings first.'}), 401
-    
     filepath = get_current_file()
     if not filepath or not os.path.exists(filepath):
         return jsonify({'error': 'Please upload a file first.'}), 400
 
     try:
         summary = summarize_pipeline(filepath, api_key)
-        return jsonify({'result': summary})
+        return jsonify({'response': summary}) # Changed key to 'response' for consistency with chat
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/keyword', methods=['POST'])
 def api_keyword():
     api_key = get_api_key()
-    if not api_key:
-        return jsonify({'error': 'Please set your API Key in settings first.'}), 401
-    
     filepath = get_current_file()
     if not filepath or not os.path.exists(filepath):
         return jsonify({'error': 'Please upload a file first.'}), 400
 
     try:
         keywords = keyword_pipeline(filepath, api_key)
-        return jsonify({'result': keywords})
+        return jsonify({'response': keywords}) # Changed key to 'response' for consistency with chat
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

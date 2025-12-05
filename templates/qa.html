@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="qa-container">
+    <div class="qa-header">
+        <h1>Q&A Generator</h1>
+        <button class="generate-btn" onclick="generateQuestions()">Generate Questions</button>
+    </div>
+
+    <div id="qa-list" class="qa-list">
+        <!-- Questions will appear here -->
+        <div class="qa-card" style="text-align: center; color: #94a3b8;">
+            Click "Generate Questions" to create questions from the uploaded document.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function generateQuestions() {
+        const list = document.getElementById('qa-list');
+        list.innerHTML = `
+            <div class="loading-overlay">
+                <div class="spinner"></div>
+                <div>Generating questions... This may take a while.</div>
+            </div>
+        `;
+
+        try {
+            const response = await fetch('/api/questions', {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                list.innerHTML = `<div class="qa-card" style="color: #ef4444;">Error: ${data.error}</div>`;
+                return;
+            }
+
+            list.innerHTML = '';
+            if (data.result && data.result.length > 0) {
+                data.result.forEach((item, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'qa-card';
+
+                    const question = document.createElement('div');
+                    question.className = 'qa-question';
+                    question.textContent = `${index + 1}. ${item.question}`;
+
+                    const type = document.createElement('div');
+                    type.style.fontSize = '0.8rem';
+                    type.style.color = '#94a3b8';
+                    type.textContent = `Type: ${item.type} | Location: ${item.location}`;
+
+                    const btn = document.createElement('button');
+                    btn.className = 'show-answer-btn';
+                    btn.textContent = 'Show Answer';
+                    btn.onclick = function () {
+                        const ans = this.nextElementSibling;
+                        if (ans.style.display === 'none') {
+                            ans.style.display = 'block';
+                            this.textContent = 'Hide Answer';
+                        } else {
+                            ans.style.display = 'none';
+                            this.textContent = 'Show Answer';
+                        }
+                    };
+
+                    const answer = document.createElement('div');
+                    answer.className = 'qa-answer';
+                    answer.textContent = item.answer;
+
+                    card.appendChild(question);
+                    card.appendChild(type);
+                    card.appendChild(btn);
+                    card.appendChild(answer);
+                    list.appendChild(card);
+                });
+            } else {
+                list.innerHTML = '<div class="qa-card">No questions generated.</div>';
+            }
+        } catch (e) {
+            list.innerHTML = '<div class="qa-card" style="color: #ef4444;">Error generating questions.</div>';
+        }
+    }
+</script>
+{% endblock %}

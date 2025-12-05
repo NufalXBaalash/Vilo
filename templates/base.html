@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">AI Assistant</div>
+        <ul class="nav-links">
+            <li><a href="/" class="{{ 'active' if request.path == '/' else '' }}">Chat & RAG</a></li>
+            <li><a href="/qa" class="{{ 'active' if request.path == '/qa' else '' }}">Q&A Generator</a></li>
+        </ul>
+        
+        <div class="settings-area">
+            <input type="password" id="api-key-input" placeholder="Enter API Key">
+            <button onclick="saveSettings()">Save Key</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        async function saveSettings() {
+            const apiKey = document.getElementById('api-key-input').value;
+            if (!apiKey) return alert('Please enter an API key');
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({api_key: apiKey})
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    alert('API Key saved successfully!');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error saving settings');
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

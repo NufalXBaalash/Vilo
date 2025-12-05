@@ -1,15 +1,8 @@
-from openai import OpenAI
+from model_init.model import query_model
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import Docx2txtLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import re
-
-# --- Initialize the model ---
-def get_client(api_key):
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
 
 # --- Read Files Functions ---
 def read_pdf(file_path):
@@ -53,15 +46,8 @@ def summarize_chunk(chunk_text, api_key, location=None):
     \"\"\"{chunk_text}\"\"\"
     """
 
-    client = get_client(api_key)
-    response = client.chat.completions.create(
-        model="x-ai/grok-4.1-fast",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    summary = response.choices[0].message.content.strip()
-    return summary
+    summary = query_model(prompt, api_key=api_key)
+    return summary.strip()
 
 # --- Functions for PDF or Word ---
 def pdf_to_summary(file_path, api_key):
