@@ -4,11 +4,14 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from pathlib import Path
 
-def convert_pdf_to_markdown(input_file_path: Path, output_folder: Path) -> Path:
+def convert_to_markdown(input_file_path: Path, output_folder: Path) -> Path:
     """
-    Converts a PDF file to Markdown using Docling and returns the path of the output file.
+    Converts PDF, DOC, or DOCX to Markdown using Docling.
+    Returns the path to the generated .md file.
     """
-    pipeline_options = PdfPipelineOptions(
+
+    # 1) Configure PDF options
+    pdf_pipeline_options = PdfPipelineOptions(
         do_ocr=True,
         do_table_structure=True,
         table_structure_options=TableStructureOptions(do_cell_matching=True),
@@ -18,18 +21,19 @@ def convert_pdf_to_markdown(input_file_path: Path, output_folder: Path) -> Path:
         )
     )
 
-    doc_converter = DocumentConverter(
+    # 2) Prepare converter and support PDF + DOCX (also handles .doc)
+    converter = DocumentConverter(
         format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_options)
         }
     )
 
-    converted_doc = doc_converter.convert(input_file_path)
+    # 3) Perform conversion
+    converted_doc = converter.convert(str(input_file_path))
 
+    # 4) Save output
     output_folder.mkdir(exist_ok=True)
-    file_stem = input_file_path.stem
-    output_file_path = output_folder / f"{file_stem}.md"
+    output_path = output_folder / f"{input_file_path.stem}.md"
+    output_path.write_text(converted_doc.document.export_to_markdown(), encoding="utf-8")
 
-    output_file_path.write_text(converted_doc.document.export_to_markdown(), encoding="utf-8")
-
-    return output_file_path
+    return output_path

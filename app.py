@@ -9,7 +9,7 @@ from RAG_System import run_rag_pipeline
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Change this in production
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
 # Ensure upload directory exists
@@ -93,7 +93,7 @@ def chat():
                 'page': chunk.get('metadata', {}).get('page_number', 'Unknown')
             })
             
-        return jsonify({'response': answer, 'sources': sources})
+        return jsonify({'response': answer})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
