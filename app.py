@@ -64,6 +64,7 @@ def upload_file():
 def chat():
     data = request.json
     message = data.get('message', '')
+    history = data.get('history', [])
     
     filepath = get_current_file()
     if not filepath or not os.path.exists(filepath):
@@ -83,7 +84,7 @@ def chat():
         # I should check if I broke RAG_System.py by changing model_init.model
         
         api_key = get_api_key()
-        answer, best_chunks = run_rag_pipeline(filepath, message, api_key=api_key)
+        answer, best_chunks = run_rag_pipeline(filepath, message, api_key=api_key, history=history)
         
         # Format sources
         sources = []
@@ -99,6 +100,8 @@ def chat():
 
 @app.route('/api/questions', methods=['POST'])
 def api_questions():
+    data = request.json or {}
+    history = data.get('history', [])
     api_key = get_api_key()
     # QA.py uses query_model which can use default key if none provided, 
     # but let's enforce user providing it if we want.
@@ -115,7 +118,7 @@ def api_questions():
         return jsonify({'error': 'Please upload a file first.'}), 400
 
     try:
-        results = qa_pipeline(filepath, api_key)
+        results = qa_pipeline(filepath, api_key, history=history)
         return jsonify({'result': results})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -141,8 +144,9 @@ def api_keyword():
         return jsonify({'error': 'Please upload a file first.'}), 400
 
     try:
-        keywords = keyword_pipeline(filepath, api_key)
-        return jsonify({'response': keywords}) # Changed key to 'response' for consistency with chat
+        keywords_data = keyword_pipeline(filepath, api_key)
+        # Return the AI refined markdown
+        return jsonify({'response': keywords_data.get('ai_refined', '')})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -6,19 +6,25 @@ import re
 load()
 
 def adaptive_chunk_markdown(
-    file_path: Path,
+    file_path: Path = None,
+    text: str = None,
     min_size: int = 300,
     max_size: int = 1200,
     overlap: int = 100
 ) -> List[Dict]:
 
-    try:
-        text = file_path.read_text(encoding="utf-8")
-    except Exception as e:
-        return [{"text": "", "metadata": {"error": str(e), "source_file": file_path.name}}]
+    if text is None:
+        if file_path is None:
+             return [{"text": "", "metadata": {"error": "No file_path or text provided"}}]
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except Exception as e:
+            return [{"text": "", "metadata": {"error": str(e), "source_file": file_path.name}}]
+    
+    source_name = file_path.name if file_path else "Unknown"
 
     if not text.strip():
-        return [{"text": "", "metadata": {"warning": "Empty file", "source_file": file_path.name}}]
+        return [{"text": "", "metadata": {"warning": "Empty file", "source_file": source_name}}]
 
     text = re.sub(r"<!--\s*image\s*-->", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<!--\s*formula-not-decoded\s*-->", "[Formula]", text, flags=re.IGNORECASE)
@@ -166,7 +172,7 @@ def adaptive_chunk_markdown(
                     "header": header_path,
                     "sections": current_sections.copy(),
                     "size": len(current_text.strip()),
-                    "source_file": file_path.name,
+                    "source_file": source_name,
                     "chunk_type": "mixed" if len(set(current_sections)) > 1 else current_sections[0]
                 }
             })
@@ -195,7 +201,7 @@ def adaptive_chunk_markdown(
                 "header": header_path,
                 "sections": current_sections,
                 "size": len(current_text.strip()),
-                "source_file": file_path.name,
+                "source_file": source_name,
                 "chunk_type": "mixed" if len(set(current_sections)) > 1 else current_sections[0]
             }
         })
@@ -207,7 +213,7 @@ def adaptive_chunk_markdown(
                 "header": "Root",
                 "sections": ["full_document"],
                 "size": len(text.strip()),
-                "source_file": file_path.name,
+                "source_file": source_name,
                 "note": "Single chunk - too small to split"
             }
         })

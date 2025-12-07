@@ -12,7 +12,8 @@ def run_rag_pipeline(
     output_folder: str = None,
     top_k: int = 5,
     alpha: float = 0.5,
-    api_key: str = None
+    api_key: str = None,
+    history: list = None
 ):
 
     file_path = Path(file_path)
@@ -46,8 +47,19 @@ def run_rag_pipeline(
     best_chunks = hybrid_search(query, chunks, bm25, tokenized_texts, faiss_index, top_k=top_k, alpha=alpha)
 
     context_text = "\n\n".join([c["text"] for c in best_chunks])
+    
+    # Format history
+    history_text = ""
+    if history:
+        history_text = "## Chat History\n"
+        for msg in history:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            history_text += f"- **{role}**: {content}\n"
+        history_text += "\n"
+
     full_prompt = f"""
-You are an intelligent assistant. Answer the question using ONLY the information below.
+You are an intelligent assistant. Answer the question using ONLY the information below and the provided chat history.
 your answer should be summarized and short but has the main information the user asked for.
 
 ## Context

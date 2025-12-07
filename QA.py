@@ -1,6 +1,7 @@
 from model_init.model import query_model
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from utils.chunking import adaptive_chunk_markdown
 from langchain_community.document_loaders import Docx2txtLoader
 import json
 import re
@@ -29,16 +30,6 @@ def read_word(file_path):
     full_text = docs[0].page_content
     return full_text
 
-# Chunk the text (for model tokens)
-def chunk_text(full_text, chunk_size=500, chunk_overlap=50):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
-
-    docs = splitter.create_documents([full_text])
-    return docs
-
 # Extract used pages to make Questions from PDFs
 def extract_pages_from_chunk(chunk_text):
     pages = re.findall(r"\[PAGE:(\d+)\]", chunk_text)
@@ -48,7 +39,7 @@ def extract_pages_from_chunk(chunk_text):
 
 # --- Generate Questions and Answers ---
 
-def generate_qa_per_chunk(chunk_text, api_key, location=None):
+def generate_qa_per_chunk(chunk_text, api_key, location=None, history=None):
     # Determine number of questions based on length
     # e.g., 1 question per 300 characters, min 2, max 5
     text_len = len(chunk_text)
@@ -56,6 +47,7 @@ def generate_qa_per_chunk(chunk_text, api_key, location=None):
 
     # Build location label for prompt
     location_label = f"Location: {location}" if location else ""
+
 
     prompt = f"""
     You are an AI question generator. Your task is to create **{num_questions} high-quality questions** based on the following text chunk.
@@ -91,7 +83,11 @@ def generate_qa_per_chunk(chunk_text, api_key, location=None):
     # If we want to support the previous model (x-ai/grok-4.1-fast), we should pass it.
     # But let's try to use the default from model_init first as requested.
     
-    content = query_model(prompt, api_key=api_key)
+    try:
+        content = query_model(prompt, api_key=api_key)
+    except Exception as e:
+        print(f"Error querying model: {e}")
+        return []
 
     # Clean up markdown code blocks if present
     if content.startswith("```json"):
@@ -116,35 +112,35 @@ def generate_qa_per_chunk(chunk_text, api_key, location=None):
 
 
 # --- Functions for PDF or Word ---
-def pdf_to_qa(file_path, api_key):
+def pdf_to_qa(file_path, api_key, history=None):
     pages = read_pdf(file_path)          
     full_text = merge_pages(pages)       
-    chunks = chunk_text(full_text)       
+    chunks = adaptive_chunk_markdown(text=full_text)       
 
     all_qas = []
 
     for chunk in chunks:
-        text = chunk.page_content
+        text = chunk['text']
         pages = extract_pages_from_chunk(text)
         # Convert pages list to string for location
         location_str = f"Pages {', '.join(map(str, pages))}"
         
-        qa_list = generate_qa_per_chunk(text, api_key, location=location_str)
+        qa_list = generate_qa_per_chunk(text, api_key, location=location_str, history=history)
         if qa_list:
             all_qas.extend(qa_list)
 
     return all_qas
 
-def word_to_qa(file_path, api_key):
+def word_to_qa(file_path, api_key, history=None):
     full_text = read_word(file_path)
-    chunks = chunk_text(full_text)
+    chunks = adaptive_chunk_markdown(text=full_text)
 
     all_qas = []
     for i, chunk in enumerate(chunks):
-        text = chunk.page_content
+        text = chunk['text']
         location_str = f"Chunk {i+1}"
         
-        qa_list = generate_qa_per_chunk(text, api_key, location=location_str)
+        qa_list = generate_qa_per_chunk(text, api_key, location=location_str, history=history)
         if qa_list:
             all_qas.extend(qa_list)
 
@@ -152,8 +148,8 @@ def word_to_qa(file_path, api_key):
 
 
 # --------- The Full Pipeline ---------
-def qa_pipeline(filepath, api_key):
+def qa_pipeline(filepath, api_key, history=None):
   if filepath.endswith(".pdf"):
-    return pdf_to_qa(filepath, api_key)
+    return pdf_to_qa(filepath, api_key, history=history)
   elif filepath.endswith(".docx"):
-    return word_to_qa(filepath, api_key)
+    return word_to_qa(filepath, api_key, history=history)

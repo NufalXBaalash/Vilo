@@ -28,8 +28,17 @@
         `;
 
         try {
+            // Get history from session storage
+            let history = [];
+            const savedHistory = sessionStorage.getItem('chatHistory');
+            if (savedHistory) {
+                history = JSON.parse(savedHistory);
+            }
+
             const response = await fetch('/api/questions', {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: history })
             });
             const data = await response.json();
 

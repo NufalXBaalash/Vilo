@@ -1,15 +1,34 @@
-from model_init.model import query_model
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.document_loaders import Docx2txtLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import re
-import json
+import nltk
+nltk.download('stopwords')
+from nltk import ngrams
+from nltk.corpus import stopwords
+from collections import Counter
 
-# --- Read Files Functions ---
+from openai import OpenAI
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from utils.chunking import adaptive_chunk_markdown
+from model_init.model import query_model
+
+
+# ------------------------------------------
+# API CLIENT
+# ------------------------------------------
+def get_client(api_key):
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+    )
+
+
+# ------------------------------------------
+# FILE READERS
+# ------------------------------------------
 def read_pdf(file_path):
     loader = PyPDFLoader(file_path)
-    docs = loader.load()   
+    docs = loader.load()
     return docs
+
 
 def merge_pages(docs):
     full_text = ""
@@ -18,75 +37,129 @@ def merge_pages(docs):
         full_text += f"\n[PAGE:{page_num}]\n" + doc.page_content
     return full_text
 
+
 def read_word(file_path):
     loader = Docx2txtLoader(file_path)
     docs = loader.load()
     return docs[0].page_content
 
-def chunk_text(full_text, chunk_size=1000, chunk_overlap=100):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
-    docs = splitter.create_documents([full_text])
-    return docs
 
-def extract_pages_from_chunk(chunk_text):
-    pages = re.findall(r"\[PAGE:(\d+)\]", chunk_text)
-    return list(sorted(set(map(int, pages))))
 
-# --- Generate Keywords ---
-def extract_keywords_chunk(chunk_text, api_key, location=None):
-    location_label = f"Location: {location}" if location else ""
+
+# ------------------------------------------***
+# PREPROCESSING & CLEANING
+# ------------------------------------------
+def clean_text(text):
+    stop_words = set(stopwords.words("english"))
+
+    # Lowercase
+    text = text.lower()
+
+    # Remove punctuation + numbers
+    text = re.sub(r"[^a-z\s]", " ", text)
+
+    # Tokenize
+    tokens = text.split()
+
+    # Remove stopwords + remove single letters
+    cleaned = [t for t in tokens if t not in stop_words and len(t) > 1]
+
+    return " ".join(cleaned)
+
+# ------------------------------------------
+# SMART KEYWORD EXTRACTION
+# ------------------------------------------
+def extract_smart_keywords(text, top_n=20):
+    text = clean_text(text)
+    tokens = text.split()
+
+    # Unigrams
+    unigram_counts = Counter(tokens)
+
+    # Bigrams
+    bigram_list = list(ngrams(tokens, 2))
+    bigram_counts = Counter(bigram_list)
+
+    final_keywords = []
+
+    for bigram, count in bigram_counts.most_common():
+        w1, w2 = bigram
+
+        # Check if bigram is "strong" compared to each word
+        if count > unigram_counts[w1] * 0.5 and count > unigram_counts[w2] * 0.5:
+            final_keywords.append(f"{w1} {w2}")
+        else:
+            if w1 not in final_keywords:
+                final_keywords.append(w1)
+            if w2 not in final_keywords:
+                final_keywords.append(w2)
+
+    return final_keywords[:top_n]
+
+
+
+# ------------------------------------------
+# REFINE KEYWORDS WITH GPT
+# ------------------------------------------
+def refine_keywords_with_gpt(keywords, api_key):
+
     prompt = f"""
-    You are an AI keyword extractor. Extract the most important keywords and concepts from the following text.
-    Return them as a bulleted list.
-    {location_label}
+    Analyze the following list of potential keywords extracted from a document. 
+    Your task is to refine this list and provide a comprehensive, well-structured set of keywords and key phrases that best represent the document's content.
 
-    Text:
-    \"\"\"{chunk_text}\"\"\"
+    note : get 4-6 keywords from each category
+    Please output the result in **Markdown** format. 
+    
+    Structure the output as follows:
+    1.  **Top Keywords**: A list of the most important 5-10 keywords.
+    2.  **Key Phrases**: Important multi-word phrases.
+    3.  **Categorized Keywords**: Group the keywords by relevant categories (e.g., "Technical Terms", "Concepts", "Entities", etc.) if applicable.
+
+    Do NOT return JSON. Return only the Markdown text.
+
+    Here are the raw extracted keywords:
+    {keywords}
     """
 
-    keywords = query_model(prompt, api_key=api_key)
-    return keywords.strip()
+    response = query_model(prompt)
 
-# --- Functions for PDF or Word ---
-def pdf_to_keywords(file_path, api_key):
-    pages = read_pdf(file_path)          
-    full_text = merge_pages(pages)       
-    chunks = chunk_text(full_text)       
+    return response
 
-    all_keywords = []
+# ------------------------------------------
+# MAIN PIPELINE
+# ------------------------------------------
+def keyword_pipeline(file_path, api_key):
+    """Reads PDF/DOCX + extracts smart keywords."""
 
-    for chunk in chunks:
-        text = chunk.page_content
-        pages = extract_pages_from_chunk(text)
-        location_str = f"Pages {', '.join(map(str, pages))}"
-        keywords = extract_keywords_chunk(text, api_key, location=location_str)
-        all_keywords.append(keywords)
+    # Detect file type
+    if file_path.lower().endswith(".pdf"):
+        docs = read_pdf(file_path)
+        text = merge_pages(docs)
 
-    final_keywords = "\n\n".join(all_keywords)
-    return final_keywords
+    elif file_path.lower().endswith(".docx"):
+        text = read_word(file_path)
 
-def word_to_keywords(file_path, api_key):
-    full_text = read_word(file_path)
-    chunks = chunk_text(full_text)
-
-    all_keywords = []
-    for i, chunk in enumerate(chunks):
-        text = chunk.page_content
-        location_str = f"Chunk {i+1}"
-        keywords = extract_keywords_chunk(text, api_key, location=location_str)
-        all_keywords.append(keywords)
-
-    final_keywords = "\n\n".join(all_keywords)
-    return final_keywords
-
-# --------- The Full Pipeline ---------
-def keyword_pipeline(filepath, api_key):
-    if filepath.endswith(".pdf"):
-        return pdf_to_keywords(filepath, api_key)
-    elif filepath.endswith(".docx"):
-        return word_to_keywords(filepath, api_key)
     else:
-        raise ValueError("Unsupported file type. Use PDF or DOCX.")
+        raise ValueError("Unsupported file format. Use PDF or DOCX.")
+
+    # Chunk text
+    chunks = adaptive_chunk_markdown(text=text)
+
+    all_keywords = []
+
+    # Extract keywords per chunk
+    for chunk in chunks:
+        kws = extract_smart_keywords(chunk['text'])
+        all_keywords.extend(kws)
+
+    # Deduplicate
+    all_keywords = list(dict.fromkeys(all_keywords))
+
+     # USE GROK FOR FINAL CLEANING
+    ai_refined = refine_keywords_with_gpt(all_keywords, api_key)
+
+
+    return {
+        "raw_keywords": all_keywords,
+        "ai_refined": ai_refined
+    }

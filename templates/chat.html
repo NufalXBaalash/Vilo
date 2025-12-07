@@ -59,6 +59,32 @@
         if (e.key === 'Enter') sendMessage();
     }
 
+    let chatHistory = [];
+
+    // Load history on page load
+    window.onload = function () {
+        // Check if page was reloaded
+        const navigationEntries = performance.getEntriesByType("navigation");
+        if (navigationEntries.length > 0 && navigationEntries[0].type === 'reload') {
+            sessionStorage.removeItem('chatHistory');
+            chatHistory = [];
+            return; // Don't load history
+        }
+
+        const savedHistory = sessionStorage.getItem('chatHistory');
+        if (savedHistory) {
+            chatHistory = JSON.parse(savedHistory);
+            chatHistory.forEach(msg => {
+                addMessage(msg.content, msg.role, false); // false = don't scroll yet
+            });
+            // Scroll to bottom after loading all
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+    };
+
+
+
     async function sendMessage() {
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
@@ -67,6 +93,10 @@
         addMessage(message, 'user');
         input.value = '';
 
+        // Add to history
+        chatHistory.push({ role: 'user', content: message });
+        sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+
         // Add loading indicator
         const loadingId = addLoadingMessage();
 
@@ -74,7 +104,10 @@
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({
+                    message: message,
+                    history: chatHistory.slice(0, -1)
+                })
             });
             const data = await response.json();
 
@@ -92,6 +125,10 @@
                     });
                 }
                 addMessage(content, 'bot');
+
+                // Add bot response to history
+                chatHistory.push({ role: 'bot', content: content });
+                sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
             }
         } catch (e) {
             removeMessage(loadingId);
@@ -105,7 +142,7 @@
         const id = 'msg-' + Date.now();
         div.id = id;
         div.className = 'message bot';
-        
+
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         contentDiv.innerHTML = `
@@ -115,7 +152,7 @@
                 <div class="typing-dot"></div>
             </div>
         `;
-        
+
         div.appendChild(contentDiv);
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
@@ -127,18 +164,20 @@
         if (el) el.remove();
     }
 
-    function addMessage(text, sender) {
+    function addMessage(text, sender, scroll = true) {
         const container = document.getElementById('chat-container');
         const div = document.createElement('div');
         div.className = `message ${sender}`;
-        
+
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content markdown-body';
         contentDiv.innerHTML = marked.parse(text);
-        
+
         div.appendChild(contentDiv);
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        if (scroll) {
+            container.scrollTop = container.scrollHeight;
+        }
     }
 </script>
 {% endblock %}
