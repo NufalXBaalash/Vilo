@@ -103,7 +103,7 @@ def extract_smart_keywords(text, top_n=20):
 # ------------------------------------------
 def refine_keywords_with_gpt(keywords, api_key):
 
-    prompt = f"""Analyze the following list of potential keywords extracted from a document. 
+    prompt = f"""Analyze the following list of potential keywords extracted from a document.
 Your task is to refine this list and provide a comprehensive, well-structured set of keywords and key phrases that best represent the document's content.
 
 Please output the result in **Markdown** format with clear sections.
