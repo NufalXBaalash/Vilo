@@ -233,27 +233,6 @@ DEFAULT_MODEL_NAME = "llama-3.1-8b-instant"
 
 ---
 
-## 🐛 Troubleshooting
-
-### ML Service Not Responding
-- Ensure Python dependencies are installed
-- Check that port 5001 is not in use
-- Verify API key is correctly set
-
-### File Upload Fails
-- Check that `uploads/` directory exists
-- Ensure Node.js server is running on port 3000
-
-### CORS Errors
-- Verify all three services are running
-- Check proxy configuration in `vite.config.js`
-
-### White Screen
-- Check browser console for errors
-- Ensure all dependencies are installed
-- Clear browser cache and reload
-
----
 
 ## 🤝 Contributing
 

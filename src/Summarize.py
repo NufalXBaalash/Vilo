@@ -1,93 +1,63 @@
+
+from pathlib import Path
+import json
+from utils.chunking import adaptive_chunk_markdown
+from utils.embeddings import add_embeddings_to_chunks
+from utils.markdown_conversion import convert_to_markdown
 from model_init.model import query_model
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.document_loaders import Docx2txtLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-import re
 
-# --- Read Files Functions ---
-def read_pdf(file_path):
-    loader = PyPDFLoader(file_path)
-    docs = loader.load()   
-    return docs
-
-def merge_pages(docs):
-    full_text = ""
-    for doc in docs:
-        page_num = doc.metadata["page"]
-        full_text += f"\n[PAGE:{page_num}]\n" + doc.page_content
-    return full_text
-
-def read_word(file_path):
-    loader = Docx2txtLoader(file_path)
-    docs = loader.load()
-    return docs[0].page_content
-
-def chunk_text(full_text, chunk_size=1000, chunk_overlap=100):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
-    docs = splitter.create_documents([full_text])
-    return docs
-
-def extract_pages_from_chunk(chunk_text):
-    pages = re.findall(r"\[PAGE:(\d+)\]", chunk_text)
-    return list(sorted(set(map(int, pages))))
-
-# --- Generate Summaries ---
-def summarize_chunk(chunk_text, api_key, location=None):
-    location_label = f"Location: {location}" if location else ""
-    prompt = f"""
-    You are an AI summarizer. Summarize the following text clearly and concisely.
-    Include the main ideas and important points. Keep it professional and easy to understand.
-    {location_label}
-
-    Text:
-    \"\"\"{chunk_text}\"\"\"
-    """
-
-    summary = query_model(prompt, api_key=api_key)
-    return summary.strip()
-
-# --- Functions for PDF or Word ---
-def pdf_to_summary(file_path, api_key):
-    pages = read_pdf(file_path)          
-    full_text = merge_pages(pages)       
-    chunks = chunk_text(full_text)       
-
-    summaries = []
-
-    for chunk in chunks:
-        text = chunk.page_content
-        pages = extract_pages_from_chunk(text)
-        location_str = f"Pages {', '.join(map(str, pages))}"
-        summary = summarize_chunk(text, api_key, location=location_str)
-        summaries.append(summary)
-
-    # Combine chunk summaries into a final summary
-    final_summary = "\n".join(summaries)
-    return final_summary
-
-def word_to_summary(file_path, api_key):
-    full_text = read_word(file_path)
-    chunks = chunk_text(full_text)
-
-    summaries = []
-    for i, chunk in enumerate(chunks):
-        text = chunk.page_content
-        location_str = f"Chunk {i+1}"
-        summary = summarize_chunk(text, api_key, location=location_str)
-        summaries.append(summary)
-
-    final_summary = "\n".join(summaries)
-    return final_summary
-
-# --------- The Full Pipeline ---------
-def summarize_pipeline(filepath, api_key):
-    if filepath.endswith(".pdf"):
-        return pdf_to_summary(filepath, api_key)
-    elif filepath.endswith(".docx"):
-        return word_to_summary(filepath, api_key)
+# Process File into Chunks
+def process_file_to_chunks(file_path, output_folder=None):
+    file_path = Path(file_path)
+    if output_folder is None:
+        output_folder = Path(__file__).parent / "processed"
     else:
-        raise ValueError("Unsupported file type. Use PDF or DOCX.")
+        output_folder = Path(output_folder)
+    output_folder.mkdir(exist_ok=True)
+
+    cache_file = output_folder / f"{file_path.stem}_chunks.json"
+
+    if cache_file.exists():
+        with open(cache_file, "r", encoding="utf-8") as f:
+            chunks = json.load(f)
+    else:
+        md_file = convert_to_markdown(file_path, output_folder)
+        chunks = adaptive_chunk_markdown(md_file)
+        chunks = add_embeddings_to_chunks(chunks)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(chunks, f, ensure_ascii=False, indent=2)
+    return chunks
+
+# Summarize Each Chunk
+def summarize_chunks(chunks, api_key):
+    summaries = []
+    for chunk in chunks:
+        text = chunk["text"]
+        location_str = chunk.get("location", "Unknown")
+        prompt = f"""
+You are a professional summarizer.
+Create a **concise but informative summary** of the text below.
+- Keep all key concepts and important examples.
+- Remove minor, repetitive, or redundant details.
+- Keep sentences short and easy to read.
+- Highlight important notes or examples with *italics* or **bold**.
+- Avoid over-summarizing; the summary should still convey the full meaning.
+-Do not make it vary long 
+Text to summarize: {location_str}
+
+Text:
+\"\"\"{text}\"\"\"
+"""
+        summary = query_model(prompt, api_key=api_key)
+        summaries.append(summary.strip())
+    return "\n".join(summaries)
+
+# Full Pipeline
+def summarize_pipeline(file_path, api_key, output_folder=None):
+    chunks = process_file_to_chunks(file_path, output_folder)
+    final_summary = summarize_chunks(chunks, api_key)
+    return final_summary
+
+
+
 
