@@ -34,11 +34,23 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
-    const logout = () => {
+    const logout = async () => {
+        try {
+            // Call cleanup endpoint to delete cached files
+            await fetch('http://localhost:5000/api/cleanup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+        } catch (error) {
+            console.error('Failed to cleanup cache:', error);
+            // Continue with logout even if cleanup fails
+        }
+
         setUser(null);
         setIsAuthenticated(false);
         localStorage.removeItem('user');
-        // Clear cache will be handled by Dashboard component
     };
 
     return (

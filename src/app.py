@@ -1,5 +1,7 @@
 import os
 import json
+import shutil
+from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session, jsonify
 from werkzeug.utils import secure_filename
 from QA import qa_pipeline
@@ -148,6 +150,26 @@ def api_keyword():
         # Return the AI refined markdown
         return jsonify({'response': keywords_data.get('ai_refined', '')})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cleanup', methods=['POST'])
+def cleanup_cache():
+    """Delete all cached files in the processed directory when user logs out"""
+    try:
+        processed_dir = Path(__file__).parent.parent / "processed"
+        
+        if processed_dir.exists():
+            # Delete all files in the processed directory
+            for item in processed_dir.iterdir():
+                if item.is_file():
+                    item.unlink()
+                    print(f"Deleted cache file: {item}")
+            
+            return jsonify({'status': 'success', 'message': 'Cache cleared successfully'})
+        else:
+            return jsonify({'status': 'success', 'message': 'No cache to clear'})
+    except Exception as e:
+        print(f"Error cleaning cache: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

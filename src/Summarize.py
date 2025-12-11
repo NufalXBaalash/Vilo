@@ -10,7 +10,7 @@ from model_init.model import query_model
 def process_file_to_chunks(file_path, output_folder=None):
     file_path = Path(file_path)
     if output_folder is None:
-        output_folder = Path(__file__).parent / "processed"
+        output_folder = Path(__file__).parent.parent / "processed"
     else:
         output_folder = Path(output_folder)
     output_folder.mkdir(exist_ok=True)

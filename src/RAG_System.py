@@ -18,7 +18,7 @@ def run_rag_pipeline(
 
     file_path = Path(file_path)
     if output_folder is None:
-        output_folder = Path(__file__).parent / "processed"
+        output_folder = Path(__file__).parent.parent / "processed"
     else:
         output_folder = Path(output_folder)
     output_folder.mkdir(exist_ok=True)
