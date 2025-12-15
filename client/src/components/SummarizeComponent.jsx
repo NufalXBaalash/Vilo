@@ -39,30 +39,31 @@ const SummarizeComponent = () => {
     };
 
     const downloadPDF = async () => {
-        if (!summary) return;
+        if (!currentFile) return;
 
-        // Dynamic import to avoid SSR issues if any, though this is likely CSR
-        const html2pdf = (await import('html2pdf.js')).default;
+        try {
+            const response = await fetch('/api/download_summary_pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: currentFile.filename }),
+            });
 
-        const element = document.createElement('div');
-        element.innerHTML = `
-            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                <h1 style="text-align: center; color: #333;">Summary: ${currentFile.filename}</h1>
-                <div class="markdown-body">
-                    ${document.querySelector('.prose').innerHTML}
-                </div>
-            </div>
-        `;
-
-        const opt = {
-            margin: 1,
-            filename: `${currentFile.filename}_summary.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-        };
-
-        html2pdf().set(opt).from(element).save();
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${currentFile.filename.split('.')[0]}_summary.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } else {
+                console.error('Failed to download PDF');
+            }
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+        }
     };
 
     if (!currentFile) {

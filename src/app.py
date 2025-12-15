@@ -8,6 +8,8 @@ from QA import qa_pipeline
 from Summarize import summarize_pipeline
 from Keyword import keyword_pipeline
 from RAG_System import run_rag_pipeline
+from utils.summary_to_pdf import generate_summary_pdf
+from flask import send_file
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Change this in production
@@ -170,6 +172,35 @@ def cleanup_cache():
             return jsonify({'status': 'success', 'message': 'No cache to clear'})
     except Exception as e:
         print(f"Error cleaning cache: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/download_summary_pdf', methods=['POST'])
+def download_summary_pdf():
+    data = request.json
+    filename = data.get('filename')
+    api_key = get_api_key() # Use session API key
+
+    if not filename:
+        return jsonify({'error': 'No filename provided'}), 400
+
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File not found'}), 404
+
+    # Define output PDF path
+    pdf_filename = f"{os.path.splitext(filename)[0]}_summary.pdf"
+    pdf_filepath = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
+
+    try:
+        success = generate_summary_pdf(filepath, api_key, pdf_filepath)
+        
+        if success and os.path.exists(pdf_filepath):
+            return send_file(pdf_filepath, as_attachment=True, download_name=pdf_filename)
+        else:
+            return jsonify({'error': 'Failed to generate PDF'}), 500
+
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

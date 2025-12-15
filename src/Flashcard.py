@@ -6,7 +6,7 @@ from utils.flashcards_per_chunk import generate_flashcards_per_chunk
 #  Full PDF / Word pipeline using  utils
 def flashcard_pipeline(file_path, api_key, history=None):
     md_text = read_file_to_text(file_path)
-    chunks = adaptive_chunk_markdown(md_text)
+    chunks = adaptive_chunk_markdown(text = md_text)
     all_flashcards = []
 
     if file_path.endswith(".pdf"):

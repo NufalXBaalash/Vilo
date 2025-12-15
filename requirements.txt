@@ -11,3 +11,5 @@ docling
 pypdf
 docx2txt
 wordsegment
+pdfkit
+markdown
