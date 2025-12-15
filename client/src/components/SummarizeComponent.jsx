@@ -38,6 +38,33 @@ const SummarizeComponent = () => {
         }
     };
 
+    const downloadPDF = async () => {
+        if (!summary) return;
+
+        // Dynamic import to avoid SSR issues if any, though this is likely CSR
+        const html2pdf = (await import('html2pdf.js')).default;
+
+        const element = document.createElement('div');
+        element.innerHTML = `
+            <div style="padding: 20px; font-family: Arial, sans-serif;">
+                <h1 style="text-align: center; color: #333;">Summary: ${currentFile.filename}</h1>
+                <div class="markdown-body">
+                    ${document.querySelector('.prose').innerHTML}
+                </div>
+            </div>
+        `;
+
+        const opt = {
+            margin: 1,
+            filename: `${currentFile.filename}_summary.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save();
+    };
+
     if (!currentFile) {
         return (
             <div className="text-center text-gray-500 mt-20">
@@ -54,25 +81,36 @@ const SummarizeComponent = () => {
                     <FileText className="text-blue-600" />
                     Summarizer
                 </h2>
-                <button
-                    onClick={generateSummary}
-                    disabled={isLoading}
-                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg"
-                >
-                    {isLoading ? (
-                        <>
-                            <img src="/assets/thinking_logo.png" alt="Processing" className="w-5 h-5 object-contain animate-pulse" />
-                            <span>Summarizing</span>
-                            <div className="flex gap-1">
-                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                        </>
-                    ) : (
-                        'Generate Summary'
+                <div className="flex gap-3">
+                    {summary && (
+                        <button
+                            onClick={downloadPDF}
+                            className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium transition-all shadow-sm flex items-center gap-2"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Download PDF
+                        </button>
                     )}
-                </button>
+                    <button
+                        onClick={generateSummary}
+                        disabled={isLoading}
+                        className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg"
+                    >
+                        {isLoading ? (
+                            <>
+                                <img src="/assets/thinking_logo.png" alt="Processing" className="w-5 h-5 object-contain animate-pulse" />
+                                <span>Summarizing</span>
+                                <div className="flex gap-1">
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                </div>
+                            </>
+                        ) : (
+                            'Generate Summary'
+                        )}
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 bg-white rounded-2xl p-8 border-2 border-gray-200 overflow-y-auto shadow-sm">
